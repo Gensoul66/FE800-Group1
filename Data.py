@@ -66,6 +66,13 @@ def feature_engineering(pre_stock_price):
     feature = []
     for i in pre_stock_price :
         # feature engineering
+
+        # new features
+        sma5 = i.ta.sma(length=5)
+        sma10 = i.ta.sma(length=10)
+        sma21 = i.ta.sma(length=21)
+
+        # old feature new features
         macd_signal = i.ta.macd(fast=12, slow=26, signal=9)['MACDs_12_26_9']
         macd = i.ta.macd(fast=12, slow=26,signal=9)['MACD_12_26_9']
         rsi_14 = i.ta.rsi(length=14)
@@ -75,32 +82,55 @@ def feature_engineering(pre_stock_price):
         s_return = i['close'].pct_change()
         s_vol = s_return.rolling(14).std()
 
-        df = pd.concat([rsi_14, willr_14, macd_signal, macd, proc, aobv, s_return, s_vol], axis=1)
-        df.columns = ['RSI_14', 'WILLR_14', 'MACD_SIGNAL',
-                      'MACD', 'ROC_14', 'Aobv', 'R(t-1)', 'Vol(t-1)']
+        df = pd.concat([sma5,sma10,sma21,
+                        rsi_14, willr_14, macd_signal, macd, proc, aobv, s_return, s_vol], axis=1)
+        df.columns = ['SMA5','SMA10','SMA21',
+                      'RSI_14', 'WILLR_14', 'MACD_SIGNAL','MACD', 'ROC_14', 'Aobv', 'R(t-1)', 'Vol(t-1)']
         feature.append(df)
 
     return feature
+
 # help(pre_stock_dailyprice[0].ta)
 
 # Min-Max normalization
-def data_normalization(feature):
+def data_normalization(feature,save_scaler):
     scaler = MinMaxScaler()
+
+    # save the feature and scaler
     norm_feature = []
+    my_scaler = []
+
+    # copy data
     feature_temp = copy.deepcopy(feature)
-    for i in feature_temp:
-        i.iloc[:,0:] = scaler.fit_transform(i.iloc[:,0:])
-        norm_feature.append(i.iloc[:,0:])
-    return norm_feature
+
+    if save_scaler == False:
+        for i in feature_temp:
+            i.iloc[:,0:] = scaler.fit_transform(i.iloc[:,0:])
+            norm_feature.append(i.iloc[:,0:])
+
+        return norm_feature
+
+    elif save_scaler == True:
+        for i in feature_temp:
+
+            min_max = [np.max(i.iloc[:,0]),np.min(i.iloc[:,0])]
+            i.iloc[:,0:] = scaler.fit_transform(i.iloc[:,0:])
+            norm_feature.append(i.iloc[:,0:])
+
+            my_scaler.append(min_max)
+
+        return norm_feature,my_scaler
 
 
 # Combine Y and X and dropna
 def data_combination(y, x, type):
     data = []
     if type == 'regression':
-        for i in range(len(y)) :
-            df = pd.concat([y[i], x[i]], axis=1)
-            df.columns = ['Return', 'RSI_14', 'WILLR_14', 'MACD_SIGNAL',
+        for i in range(len(y)):
+            df = pd.concat([y[i]['Close'], x[i]], axis=1)
+            df.columns = ['Price',                                          # Close price
+                          'SMA5','SMA10','SMA21',                           # new feature
+                          'RSI_14', 'WILLR_14', 'MACD_SIGNAL',
                           'MACD', 'ROC_14', 'Aobv', 'R(t-1)', 'Vol(t-1)']
             df = df.dropna()
             data.append(df)
@@ -108,7 +138,9 @@ def data_combination(y, x, type):
     elif type == 'classification':
         for i in range(len(y)):
             df = pd.concat([y[i], x[i]],axis=1)
-            df.columns = ['Label', 'RSI_14', 'WILLR_14', 'MACD_SIGNAL',
+            df.columns = ['Label',
+                          'SMA5', 'SMA10', 'SMA21',
+                          'RSI_14', 'WILLR_14', 'MACD_SIGNAL',
                           'MACD', 'ROC_14', 'Aobv', 'R(t-1)', 'Vol(t-1)']
             df = df.dropna()
             data.append(df)
